@@ -2,6 +2,10 @@ import requests
 from sqlalchemy import create_engine, text
 import pandas as pd
 import logging
+import os
+from dotenv import load_dotenv, dotenv_values 
+
+load_dotenv() 
 
 # Configure logging
 logging.basicConfig(
@@ -33,30 +37,38 @@ def create_insurance_data_table(engine):
     """Create the insurance_data table in the PostgreSQL database."""
     try:
         with engine.connect() as conn:
-            drop_statement = text("DROP TABLE IF EXISTS insurance_data")
-            create_statement = text("""
-                CREATE TABLE IF NOT EXISTS insurance_data (
-                    IDpol INT,
-                    ClaimNb INT,
-                    Exposure DECIMAL(5, 2),
-                    VehPower INT,
-                    VehAge INT,
-                    DrivAge INT,
-                    BonusMalus INT,
-                    VehBrand VARCHAR(10),
-                    VehGas VARCHAR(10),
-                    Area VARCHAR(5),
-                    Density INT,
-                    Region VARCHAR(50),
-                    ClaimAmount INT
-                );
-            """)
-            conn.execute(drop_statement)
-            conn.execute(create_statement)
-            logging.info("insurance_data table created successfully!")
+            with conn.begin():  # Use a transaction to ensure atomicity
+                # Define SQL statements
+                sql_statements = """
+                    DROP TABLE IF EXISTS insurance_data;
+
+                    CREATE TABLE IF NOT EXISTS insurance_data (
+                        IDpol INT,
+                        ClaimNb INT,
+                        Exposure DECIMAL(5, 2),
+                        VehPower INT,
+                        VehAge INT,
+                        DrivAge INT,
+                        BonusMalus INT,
+                        VehBrand VARCHAR(10),
+                        VehGas VARCHAR(10),
+                        Area VARCHAR(5),
+                        Density INT,
+                        Region VARCHAR(50),
+                        ClaimAmount INT
+                    );
+
+                    GRANT INSERT, UPDATE ON TABLE insurance_data TO writeonly_user;
+                    GRANT SELECT ON TABLE insurance_data TO readonly_user;
+                    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE insurance_data TO readwrite_user;
+                """
+                # Execute the SQL statements
+                conn.execute(text(sql_statements))
+                
+            logging.info("insurance_data table created and permissions set successfully!")
     except Exception as e:
         logging.error(f"An error occurred while creating the insurance_data table: {e}")
-
+        
 def insert_insurance_data_table(engine, local_file_name):
     """Insert data from a CSV file into the insurance_data table."""
     try:
@@ -86,11 +98,21 @@ local_file_name = '../local_data/insurance_claims.csv'  # Replace with your desi
 # Download file from fake GCS
 download_object_from_fake_gcs(bucket_name, object_name, local_file_name)
 
+db_username_table_manager = os.getenv('table_manager_username')
+db_password_table_manager = os.getenv('table_manager_password')
+
+db_username_write_only = os.getenv('write_only_username')
+db_password_write_only = os.getenv('write_only_password')
+
+db_host = os.getenv('db_host')
+db_port = os.getenv('db_port')
+db_name = os.getenv('db_name')
 # Create database engine
-engine = create_engine('postgresql+psycopg2://postgres:password@localhost:5432/postgres')
+engine_table_manager = create_engine(f'postgresql+psycopg2://{db_username_table_manager}:{db_password_table_manager}@{db_host}:{db_port}/{db_name}')
+engine_write_only = create_engine(f'postgresql+psycopg2://{db_username_write_only}:{db_password_write_only}@{db_host}:{db_port}/{db_name}')
 
 # Create insurance_data table
-create_insurance_data_table(engine)
+create_insurance_data_table(engine_table_manager)
 
 # Insert data into insurance_data table
-insert_insurance_data_table(engine, local_file_name)
+insert_insurance_data_table(engine_write_only, local_file_name)
