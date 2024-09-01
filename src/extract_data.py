@@ -9,7 +9,7 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    filename='../logging/insurance_data_processing.log',
+    filename='../logging/insurance_claims_processing.log',
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
@@ -33,16 +33,18 @@ def download_object_from_fake_gcs(bucket_name, object_name, local_file_name):
     except requests.exceptions.RequestException as e:
         logging.error(f"An error occurred while downloading from GCS: {e}")
 
-def create_insurance_data_table(engine):
-    """Create the insurance_data table in the PostgreSQL database."""
+def create_insurance_claims_table(engine):
+    """Create the insurance_claims table in the PostgreSQL database."""
     try:
         with engine.connect() as conn:
             with conn.begin():  # Use a transaction to ensure atomicity
                 # Define SQL statements
                 sql_statements = """
-                    DROP TABLE IF EXISTS insurance_data;
+                    BEGIN;
 
-                    CREATE TABLE IF NOT EXISTS insurance_data (
+                    DROP TABLE IF EXISTS insurance_claims;
+
+                    CREATE TABLE IF NOT EXISTS insurance_claims (
                         IDpol INT,
                         ClaimNb INT,
                         Exposure DECIMAL(5, 2),
@@ -58,19 +60,21 @@ def create_insurance_data_table(engine):
                         ClaimAmount INT
                     );
 
-                    GRANT INSERT, UPDATE ON TABLE insurance_data TO writeonly_user;
-                    GRANT SELECT ON TABLE insurance_data TO readonly_user;
-                    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE insurance_data TO readwrite_user;
+                    GRANT INSERT, UPDATE ON TABLE insurance_claims TO writeonly_user;
+                    GRANT SELECT ON TABLE insurance_claims TO readonly_user;
+                    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE insurance_claims TO readwrite_user;
+
+                    COMMIT;
                 """
                 # Execute the SQL statements
                 conn.execute(text(sql_statements))
                 
-            logging.info("insurance_data table created and permissions set successfully!")
+            logging.info("insurance_claims table created and permissions set successfully!")
     except Exception as e:
-        logging.error(f"An error occurred while creating the insurance_data table: {e}")
+        logging.error(f"An error occurred while creating the insurance_claims table: {e}")
         
-def insert_insurance_data_table(engine, local_file_name):
-    """Insert data from a CSV file into the insurance_data table."""
+def insert_insurance_claims_table(engine, local_file_name):
+    """Insert data from a CSV file into the insurance_claims table."""
     try:
         df = pd.read_csv(local_file_name)
         # Clean up and prepare DataFrame
@@ -79,8 +83,8 @@ def insert_insurance_data_table(engine, local_file_name):
         df['density'] = df['density'].astype(int)
 
         # Insert data into PostgreSQL
-        df.to_sql('insurance_data', engine, if_exists='append', index=False)
-        logging.info("Data loaded into insurance_data table successfully!")
+        df.to_sql('insurance_claims', engine, if_exists='append', index=False)
+        logging.info("Data loaded into insurance_claims table successfully!")
     except FileNotFoundError:
         logging.error(f"CSV file not found: {local_file_name}")
     except pd.errors.EmptyDataError:
@@ -88,7 +92,7 @@ def insert_insurance_data_table(engine, local_file_name):
     except pd.errors.ParserError:
         logging.error("Error parsing CSV file.")
     except Exception as e:
-        logging.error(f"An error occurred while loading data into insurance_data table: {e}")
+        logging.error(f"An error occurred while loading data into insurance_claims table: {e}")
 
 # Example usage
 bucket_name = 'sample-bucket'  # Replace with your bucket name
@@ -111,8 +115,8 @@ db_name = os.getenv('db_name')
 engine_table_manager = create_engine(f'postgresql+psycopg2://{db_username_table_manager}:{db_password_table_manager}@{db_host}:{db_port}/{db_name}')
 engine_write_only = create_engine(f'postgresql+psycopg2://{db_username_write_only}:{db_password_write_only}@{db_host}:{db_port}/{db_name}')
 
-# Create insurance_data table
-create_insurance_data_table(engine_table_manager)
+# Create insurance_claims table
+create_insurance_claims_table(engine_table_manager)
 
-# Insert data into insurance_data table
-insert_insurance_data_table(engine_write_only, local_file_name)
+# Insert data into insurance_claims table
+insert_insurance_claims_table(engine_write_only, local_file_name)

@@ -7,7 +7,8 @@ services:
     ports:
       - "4443:4443" 
     volumes:
-      - ./data:/data 
+      # Attach volume with folder /sample-bucket will make it become the bucket name
+      - ./data:/data                
     restart: unless-stopped  
 
   postgres:
