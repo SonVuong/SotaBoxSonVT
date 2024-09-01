@@ -5,6 +5,7 @@ import logging
 import os
 from dotenv import load_dotenv, dotenv_values 
 
+# Load the variables from .env file
 load_dotenv() 
 
 # Configure logging
@@ -102,6 +103,7 @@ local_file_name = '../local_data/insurance_claims.csv'  # Replace with your desi
 # Download file from fake GCS
 download_object_from_fake_gcs(bucket_name, object_name, local_file_name)
 
+# Get the environment variables
 db_username_table_manager = os.getenv('table_manager_username')
 db_password_table_manager = os.getenv('table_manager_password')
 
@@ -111,7 +113,8 @@ db_password_write_only = os.getenv('write_only_password')
 db_host = os.getenv('db_host')
 db_port = os.getenv('db_port')
 db_name = os.getenv('db_name')
-# Create database engine
+
+# Create database engines
 engine_table_manager = create_engine(f'postgresql+psycopg2://{db_username_table_manager}:{db_password_table_manager}@{db_host}:{db_port}/{db_name}')
 engine_write_only = create_engine(f'postgresql+psycopg2://{db_username_write_only}:{db_password_write_only}@{db_host}:{db_port}/{db_name}')
 
